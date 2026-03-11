@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>班级小组评分系统</title>
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js"></script>
     <style>
         * {
             margin: 0;
@@ -249,7 +246,7 @@
         
         <!-- 系统提示 -->
         <div style="background: #e3f2fd; padding: 10px; border-radius: 4px; margin-bottom: 20px; font-size: 14px;">
-            <strong>系统提示：</strong>本系统使用Firebase实时数据库保存数据，支持跨局域网实时同步。所有用户无论在哪个网络环境，都能看到最新的评分数据和成员信息。
+            <strong>系统提示：</strong>本系统使用浏览器本地存储保存数据，不同浏览器之间数据不会自动同步。建议所有用户使用同一浏览器访问系统，或定期使用「数据清零」按钮重置数据。
         </div>
         
         <!-- 控制按钮区域 -->
@@ -280,110 +277,66 @@
     </div>
 
     <script>
-        // Firebase配置 - 请替换为您自己的Firebase项目配置
-        const firebaseConfig = {
-            apiKey: "AIzaSyD9z6xK2X9f9c4X7v0e8X6z7y5x4w3v2u1",
-            authDomain: "score-system-12345.firebaseapp.com",
-            databaseURL: "https://score-system-12345-default-rtdb.firebaseio.com",
-            projectId: "score-system-12345",
-            storageBucket: "score-system-12345.appspot.com",
-            messagingSenderId: "1234567890",
-            appId: "1:1234567890:web:abcdef1234567890"
-        };
-
-        // 初始化Firebase
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-
         // 存储小组名称和评分数据
         let groups = [];
         let scoreRecords = {}; // 组名 : [分数1, 分数2, ...]
         let groupRanks = {}; // 组名 : 名次
         let groupMembers = {}; // 组名 : [{id: 学号, name: 姓名}]
 
-        // 从Firebase加载数据
-        function loadDataFromFirebase() {
-            // 加载评分数据
-            database.ref('scoreRecords').once('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    scoreRecords = snapshot.val();
-                }
-            });
+        // 从localStorage加载数据
+        function loadDataFromLocalStorage() {
+            const savedScoreRecords = localStorage.getItem('scoreRecords');
+            const savedGroupRanks = localStorage.getItem('groupRanks');
+            const savedGroupMembers = localStorage.getItem('groupMembers');
             
-            // 加载名次数据
-            database.ref('groupRanks').once('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    groupRanks = snapshot.val();
-                }
-            });
-            
-            // 加载成员数据
-            database.ref('groupMembers').once('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    groupMembers = snapshot.val();
-                }
-                // 数据加载完成后渲染
-                renderGroups();
-                renderSummary();
-            });
+            if (savedScoreRecords) {
+                scoreRecords = JSON.parse(savedScoreRecords);
+            }
+            if (savedGroupRanks) {
+                groupRanks = JSON.parse(savedGroupRanks);
+            }
+            if (savedGroupMembers) {
+                groupMembers = JSON.parse(savedGroupMembers);
+            }
         }
 
-        // 保存数据到Firebase
-        function saveDataToFirebase() {
-            database.ref('scoreRecords').set(scoreRecords);
-            database.ref('groupRanks').set(groupRanks);
-            database.ref('groupMembers').set(groupMembers);
+        // 保存数据到localStorage
+        function saveDataToLocalStorage() {
+            localStorage.setItem('scoreRecords', JSON.stringify(scoreRecords));
+            localStorage.setItem('groupRanks', JSON.stringify(groupRanks));
+            localStorage.setItem('groupMembers', JSON.stringify(groupMembers));
         }
 
-        // 设置Firebase数据监听，实现实时同步
-        function setupFirebaseListeners() {
-            // 监听评分数据变化
-            database.ref('scoreRecords').on('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    scoreRecords = snapshot.val();
-                    renderGroups();
-                    renderSummary();
-                }
-            });
-            
-            // 监听名次数据变化
-            database.ref('groupRanks').on('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    groupRanks = snapshot.val();
-                    renderGroups();
-                    renderSummary();
-                }
-            });
-            
-            // 监听成员数据变化
-            database.ref('groupMembers').on('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    groupMembers = snapshot.val();
-                    renderGroups();
-                }
-            });
+        // 模拟数据同步（每5秒检查一次）
+        function setupDataSync() {
+            // 定期检查其他用户的修改
+            setInterval(() => {
+                // 这里可以添加与服务器同步的逻辑
+                // 目前使用localStorage作为主要存储
+                console.log('数据同步检查...');
+            }, 5000);
         }
 
         // 初始化
         function init() {
+            // 从localStorage加载数据
+            loadDataFromLocalStorage();
             // 从文本框加载默认小组名称
             loadGroupsFromTextarea();
-            // 从Firebase加载数据
-            loadDataFromFirebase();
-            // 设置Firebase数据监听，实现实时同步
-            setupFirebaseListeners();
+            // 渲染小组评分卡片
+            renderGroups();
+            // 渲染统计汇总
+            renderSummary();
+            // 设置数据同步
+            setupDataSync();
         }
 
         // 从文本框加载小组名称
         function loadGroupsFromTextarea() {
             const textarea = document.getElementById('groupListInput');
-            const newGroups = textarea.value.trim().split('\n')
+            groups = textarea.value.trim().split('\n')
                 .map(group => group.trim())
                 .filter(group => group); // 移除空行
-            
-            // 处理小组名称变更
-            const oldGroups = [...groups];
-            groups = newGroups;
             
             // 初始化评分数据、名次和成员信息
             groups.forEach(group => {
@@ -399,7 +352,7 @@
             });
             
             // 保存数据
-            saveDataToFirebase();
+            saveDataToLocalStorage();
         }
 
         // 渲染小组评分卡片
@@ -487,7 +440,7 @@
             renderSummary();
             
             // 保存数据
-            saveDataToFirebase();
+            saveDataToLocalStorage();
             
             // 提示提交成功
             alert(`成功为「${groupName}」点亮 ${starCount} 颗星星！`);
@@ -511,7 +464,7 @@
             if (!isNaN(rank) && rank > 0) {
                 groupRanks[groupName] = rank;
                 renderSummary();
-                saveDataToFirebase();
+                saveDataToLocalStorage();
             }
         }
 
@@ -541,7 +494,7 @@
                 nameInput.value = '';
                 
                 // 保存数据
-                saveDataToFirebase();
+                saveDataToLocalStorage();
             } else {
                 alert('请输入完整的学号和姓名！');
             }
@@ -551,7 +504,7 @@
         function removeMember(groupName, memberId) {
             groupMembers[groupName] = groupMembers[groupName].filter(member => member.id !== memberId);
             renderGroups();
-            saveDataToFirebase();
+            saveDataToLocalStorage();
         }
 
         // 渲染统计汇总
@@ -597,10 +550,10 @@
                 renderGroups();
                 renderSummary();
                 
-                // 清空Firebase数据
-                database.ref('scoreRecords').set({});
-                database.ref('groupRanks').set({});
-                database.ref('groupMembers').set({});
+                // 清空localStorage
+                localStorage.removeItem('scoreRecords');
+                localStorage.removeItem('groupRanks');
+                localStorage.removeItem('groupMembers');
                 
                 alert('所有数据已清零！');
             }

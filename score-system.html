@@ -32,6 +32,21 @@
             margin-bottom: 30px;
         }
         
+        .control-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        
+        .clear-data-btn {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .clear-data-btn:hover {
+            background: #c82333;
+        }
+        
         .group-list {
             margin-bottom: 30px;
         }
@@ -69,20 +84,27 @@
             font-size: 14px;
         }
         
-        .score-input {
+        .star-rating {
             display: flex;
             align-items: center;
             gap: 15px;
             margin-bottom: 10px;
         }
         
-        input[type="number"] {
-            width: 80px;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            text-align: center;
-            font-size: 16px;
+        .stars {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .star {
+            font-size: 24px;
+            color: #ddd;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+        
+        .star:hover, .star.active {
+            color: #ffc107;
         }
         
         button {
@@ -222,8 +244,14 @@
     <div class="container">
         <h1>班级小组评分系统</h1>
         
-        <!-- 小组编辑区域 -->
-        <div class="edit-groups">
+        <!-- 系统提示 -->
+        <div style="background: #e3f2fd; padding: 10px; border-radius: 4px; margin-bottom: 20px; font-size: 14px;">
+            <strong>系统提示：</strong>本系统使用浏览器本地存储保存数据，不同浏览器之间数据不会自动同步。建议所有用户使用同一浏览器访问系统，或定期使用「数据清零」按钮重置数据。
+        </div>
+        
+        <!-- 控制按钮区域 -->
+        <div class="control-buttons">
+            <button class="clear-data-btn" id="clearDataBtn">数据清零</button>
             <button class="edit-btn" id="editGroupsBtn">编辑小组名称</button>
         </div>
         
@@ -251,18 +279,56 @@
     <script>
         // 存储小组名称和评分数据
         let groups = [];
-        const scoreRecords = {}; // 组名 : [分数1, 分数2, ...]
-        const groupRanks = {}; // 组名 : 名次
-        const groupMembers = {}; // 组名 : [{id: 学号, name: 姓名}]
+        let scoreRecords = {}; // 组名 : [分数1, 分数2, ...]
+        let groupRanks = {}; // 组名 : 名次
+        let groupMembers = {}; // 组名 : [{id: 学号, name: 姓名}]
+
+        // 从localStorage加载数据
+        function loadDataFromLocalStorage() {
+            const savedScoreRecords = localStorage.getItem('scoreRecords');
+            const savedGroupRanks = localStorage.getItem('groupRanks');
+            const savedGroupMembers = localStorage.getItem('groupMembers');
+            
+            if (savedScoreRecords) {
+                scoreRecords = JSON.parse(savedScoreRecords);
+            }
+            if (savedGroupRanks) {
+                groupRanks = JSON.parse(savedGroupRanks);
+            }
+            if (savedGroupMembers) {
+                groupMembers = JSON.parse(savedGroupMembers);
+            }
+        }
+
+        // 保存数据到localStorage
+        function saveDataToLocalStorage() {
+            localStorage.setItem('scoreRecords', JSON.stringify(scoreRecords));
+            localStorage.setItem('groupRanks', JSON.stringify(groupRanks));
+            localStorage.setItem('groupMembers', JSON.stringify(groupMembers));
+        }
+
+        // 模拟数据同步（每5秒检查一次）
+        function setupDataSync() {
+            // 定期检查其他用户的修改
+            setInterval(() => {
+                // 这里可以添加与服务器同步的逻辑
+                // 目前使用localStorage作为主要存储
+                console.log('数据同步检查...');
+            }, 5000);
+        }
 
         // 初始化
         function init() {
+            // 从localStorage加载数据
+            loadDataFromLocalStorage();
             // 从文本框加载默认小组名称
             loadGroupsFromTextarea();
             // 渲染小组评分卡片
             renderGroups();
             // 渲染统计汇总
             renderSummary();
+            // 设置数据同步
+            setupDataSync();
         }
 
         // 从文本框加载小组名称
@@ -284,6 +350,9 @@
                     groupMembers[group] = [];
                 }
             });
+            
+            // 保存数据
+            saveDataToLocalStorage();
         }
 
         // 渲染小组评分卡片
@@ -312,10 +381,13 @@
                             <input type="number" min="1" value="${groupRanks[group] || 0}" id="rank-${group}" onchange="updateRank('${group}')">
                         </div>
                     </div>
-                    <div class="score-input">
-                        <label>请输入该组评分 (1-10分):</label>
-                        <input type="number" min="1" max="10" step="0.5" value="5" id="score-${group}">
-                        <button onclick="submitScore('${group}')">提交评分</button>
+                    <div class="star-rating">
+                        <label>请为该组点亮星星:</label>
+                        <div class="stars" id="stars-${group}">
+                            ${[1, 2, 3, 4, 5].map(star => `
+                                <span class="star" onclick="selectStar('${group}', ${star})">&#9733;</span>
+                            `).join('')}
+                        </div>
                     </div>
                     <div class="result">
                         评分次数: <span id="count-${group}">${scores.length }</span>次 | 
@@ -346,20 +418,20 @@
             });
         }
 
-        // 提交评分
-        function submitScore(groupName) {
-            const scoreInput = document.getElementById(`score-${groupName}`);
-            const score = parseFloat(scoreInput.value);
-
-            // 验证分数
-            if (isNaN(score) || score < 1 || score > 10) {
-                alert('请输入1-10之间的有效分数！');
-                scoreInput.value = 5; // 重置为默认值
-                return;
+        // 选择星星评分
+        function selectStar(groupName, starCount) {
+            // 保存分数（星星数就是分数）
+            scoreRecords[groupName].push(starCount);
+            
+            // 更新星星状态
+            const stars = document.getElementById(`stars-${groupName}`).children;
+            for (let i = 0; i < stars.length; i++) {
+                if (i < starCount) {
+                    stars[i].classList.add('active');
+                } else {
+                    stars[i].classList.remove('active');
+                }
             }
-
-            // 保存分数
-            scoreRecords[groupName].push(score);
             
             // 更新该小组的统计信息
             updateGroupResult(groupName);
@@ -367,11 +439,11 @@
             // 更新统计汇总
             renderSummary();
             
-            // 重置输入框
-            scoreInput.value = 5;
+            // 保存数据
+            saveDataToLocalStorage();
             
             // 提示提交成功
-            alert(`成功为「${groupName}」评 ${score} 分！`);
+            alert(`成功为「${groupName}」点亮 ${starCount} 颗星星！`);
         }
 
         // 更新单个小组的统计信息
@@ -392,6 +464,7 @@
             if (!isNaN(rank) && rank > 0) {
                 groupRanks[groupName] = rank;
                 renderSummary();
+                saveDataToLocalStorage();
             }
         }
 
@@ -419,6 +492,9 @@
                 // 重置输入框
                 idInput.value = '';
                 nameInput.value = '';
+                
+                // 保存数据
+                saveDataToLocalStorage();
             } else {
                 alert('请输入完整的学号和姓名！');
             }
@@ -428,6 +504,7 @@
         function removeMember(groupName, memberId) {
             groupMembers[groupName] = groupMembers[groupName].filter(member => member.id !== memberId);
             renderGroups();
+            saveDataToLocalStorage();
         }
 
         // 渲染统计汇总
@@ -458,6 +535,30 @@
             });
         }
 
+        // 数据清零
+        function clearAllData() {
+            if (confirm('确定要清零所有数据吗？此操作不可恢复！')) {
+                // 清空所有数据
+                scoreRecords = {};
+                groupRanks = {};
+                groupMembers = {};
+                
+                // 重新初始化数据
+                loadGroupsFromTextarea();
+                
+                // 重新渲染
+                renderGroups();
+                renderSummary();
+                
+                // 清空localStorage
+                localStorage.removeItem('scoreRecords');
+                localStorage.removeItem('groupRanks');
+                localStorage.removeItem('groupMembers');
+                
+                alert('所有数据已清零！');
+            }
+        }
+
         // 编辑小组名称按钮点击事件
         document.getElementById('editGroupsBtn').addEventListener('click', function() {
             const editor = document.getElementById('groupEditor');
@@ -472,6 +573,9 @@
             document.getElementById('groupEditor').style.display = 'none';
             alert('小组名称已更新！');
         });
+
+        // 数据清零按钮点击事件
+        document.getElementById('clearDataBtn').addEventListener('click', clearAllData);
 
         // 页面加载完成后初始化
         window.onload = init;
